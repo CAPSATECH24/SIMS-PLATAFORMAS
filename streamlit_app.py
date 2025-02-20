@@ -7,9 +7,9 @@ import streamlit as st
 import logging
 from datetime import datetime
 
-# -----------------------------------------------------------------------------
-# CONFIGURACIÓN INICIAL Y LOGGING
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- 
+# CONFIGURACIÓN INICIAL Y LOGGING 
+# ----------------------------------------------------------------------------- 
 logging.basicConfig(
     level=logging.INFO, 
     filename='procesamiento.log', 
@@ -17,13 +17,11 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+# ----------------------------------------------------------------------------- 
+# BLOQUE 1: FUNCIONES Y LÓGICA PARA DATOS DE PLATAFORMAS 
+# (Basado en plataformas_hoy.py) 
+# ----------------------------------------------------------------------------- 
 
-# -----------------------------------------------------------------------------
-# BLOQUE 1: FUNCIONES Y LÓGICA PARA DATOS DE PLATAFORMAS
-# (Basado en plataformas_hoy.py)
-# -----------------------------------------------------------------------------
-
-# Mapeos predeterminados basados en el nombre de la pestaña (WIALON, ADAS, COMBUSTIBLE).
 default_mappings_plataformas = {
     "WIALON": {
         'Nombre': 'Nombre',
@@ -79,9 +77,6 @@ default_mappings_plataformas = {
 }
 
 def create_database_plataformas(db_path):
-    """
-    Crea la base de datos (tabla 'datos') para la parte de Plataformas, si no existe.
-    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute(''' 
@@ -108,10 +103,6 @@ def create_database_plataformas(db_path):
     conn.close()
 
 def insert_data_plataformas(db_path, data):
-    """
-    Inserta datos en la tabla 'datos' de la base de datos de Plataformas,
-    usando INSERT OR IGNORE para evitar duplicados.
-    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     try:
@@ -133,10 +124,6 @@ def insert_data_plataformas(db_path, data):
     return inserted
 
 def clean_telefono(telefono):
-    """
-    Limpia el campo 'Telefono' de cualquier carácter no numérico,
-    sin validar la longitud. Retorna None si no hay dígitos.
-    """
     if telefono:
         telefono = re.sub(r'\D', '', str(telefono))
         if telefono:
@@ -144,10 +131,6 @@ def clean_telefono(telefono):
     return None
 
 def extract_date_from_filename(filename):
-    """
-    Extrae la fecha con formato YYYY-MM-DD del nombre del archivo, 
-    si existe. De lo contrario, usa la fecha actual.
-    """
     match = re.search(r'\d{4}-\d{2}-\d{2}', filename)
     if match:
         return match.group(0)
@@ -155,16 +138,12 @@ def extract_date_from_filename(filename):
         return datetime.now().strftime('%Y-%m-%d')
 
 def process_excel_file_plataformas(excel_file, mappings):
-    """
-    Procesa un archivo Excel con múltiples pestañas (WIALON, ADAS, etc.),
-    aplicando los mapeos predefinidos. 
-    Valida que 'Cliente_Cuenta' no esté vacío para considerarlo 'válido'.
-    """
     all_data = []
     invalid_data = []
     total_records = 0
 
-    filename = os.path.basename(excel_file)
+    # Se usa el nombre del archivo subido para extraer la fecha
+    filename = excel_file.name
     fecha_archivo = extract_date_from_filename(filename)
     workbook = openpyxl.load_workbook(excel_file, data_only=True)
 
@@ -173,26 +152,21 @@ def process_excel_file_plataformas(excel_file, mappings):
             mapping = mappings[sheet_name]
             sheet = workbook[sheet_name]
             headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
-            
-            # Diccionario de "nombre de columna" -> índice
             col_indices = {header: idx for idx, header in enumerate(headers) if header is not None}
-            
-            # Recorrer cada fila de la pestaña
+
             for row in sheet.iter_rows(min_row=2, values_only=True):
                 total_records += 1
                 row_dict = {headers[i]: row[i] for i in range(len(headers))}
                 record = {}
                 is_valid = True
-                
-                # Validar que 'Cliente_Cuenta' no venga vacío
+
                 required_field = 'Cliente_Cuenta'
                 column_name = mapping.get(required_field)
                 value = row_dict.get(column_name) if column_name else None
                 if not value:
                     is_valid = False
-                
+
                 if is_valid:
-                    # Construir registro con los campos mapeados
                     for field in [
                         'Nombre', 'Cliente_Cuenta', 'Tipo_de_Dispositivo', 'IMEI', 'ICCID',
                         'Fecha_de_Activacion', 'Fecha_de_Desactivacion', 'Hora_de_Ultimo_Mensaje',
@@ -200,7 +174,6 @@ def process_excel_file_plataformas(excel_file, mappings):
                         'Origen', 'Fecha_Archivo'
                     ]:
                         if field == 'Origen':
-                            # Se asigna la plataforma (WIALON, ADAS, COMBUSTIBLE)
                             record[field] = mapping['Origen']
                         elif field == 'Fecha_Archivo':
                             record[field] = fecha_archivo
@@ -208,7 +181,6 @@ def process_excel_file_plataformas(excel_file, mappings):
                             col_name = mapping.get(field)
                             if col_name:
                                 val = row_dict.get(col_name)
-                                # Limpieza especial para Telefono
                                 if field == 'Telefono':
                                     val = clean_telefono(val)
                                 record[field] = val
@@ -222,13 +194,11 @@ def process_excel_file_plataformas(excel_file, mappings):
 
     return all_data, invalid_data, total_records
 
+# ----------------------------------------------------------------------------- 
+# BLOQUE 2: FUNCIONES Y LÓGICA PARA DATOS DE SIMs 
+# (Basado en set_sims-companias-unificadas.py) 
+# ----------------------------------------------------------------------------- 
 
-# -----------------------------------------------------------------------------
-# BLOQUE 2: FUNCIONES Y LÓGICA PARA DATOS DE SIMs
-# (Basado en set_sims-companias-unificadas.py)
-# -----------------------------------------------------------------------------
-
-# Mapeos predeterminados basados en el nombre de la pestaña/compañía
 default_mappings_sims = {
     "SIMPATIC": {
         'ICCID': 'iccid',
@@ -289,9 +259,6 @@ default_mappings_sims = {
 }
 
 def create_database_sims(db_path):
-    """
-    Crea (o verifica) la base de datos (tabla 'sims') para la parte de SIMs.
-    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute(''' 
@@ -309,10 +276,6 @@ def create_database_sims(db_path):
     conn.close()
 
 def insert_data_sims(db_path, data):
-    """
-    Inserta datos en la tabla 'sims', usando INSERT OR IGNORE para evitar duplicados.
-    Devuelve (total_procesados, total_insertados).
-    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     records_before = cursor.execute("SELECT COUNT(*) FROM sims").fetchone()[0]
@@ -333,11 +296,6 @@ def insert_data_sims(db_path, data):
     return len(data), records_inserted
 
 def clean_iccid_telefono_consumo(data):
-    """
-    Limpia y normaliza ICCID, TELEFONO y ConsumoMb de cada registro,
-    manteniendo ceros a la izquierda si es necesario y dejando 
-    solo dígitos.
-    """
     cleaned_data = []
     for row in data:
         cleaned_row = list(row)
@@ -345,28 +303,24 @@ def clean_iccid_telefono_consumo(data):
         original_telefono = cleaned_row[1]
         original_consumo_mb = cleaned_row[4]
         
-        # Limpieza ICCID
         if isinstance(original_iccid, float) and original_iccid.is_integer():
             cleaned_iccid = str(int(original_iccid))
         else:
             cleaned_iccid = str(original_iccid)
         cleaned_row[0] = ''.join(filter(str.isdigit, cleaned_iccid)) if cleaned_iccid else ""
         
-        # Limpieza TELEFONO
         if isinstance(original_telefono, float) and original_telefono.is_integer():
             cleaned_telefono = str(int(original_telefono))
         else:
             cleaned_telefono = str(original_telefono)
         cleaned_row[1] = ''.join(filter(str.isdigit, cleaned_telefono)) if cleaned_telefono else ""
         
-        # Limpieza ConsumoMb
         if original_consumo_mb:
             cleaned_consumo_mb = ''.join(filter(str.isdigit, str(original_consumo_mb)))
         else:
             cleaned_consumo_mb = ""
         cleaned_row[4] = cleaned_consumo_mb
         
-        # Normalización de estado/en_sesion (lowercase)
         cleaned_row[2] = cleaned_row[2].strip().lower() if cleaned_row[2] else ""
         cleaned_row[3] = cleaned_row[3].strip().lower() if cleaned_row[3] else ""
         
@@ -378,12 +332,8 @@ def clean_iccid_telefono_consumo(data):
         )
     return cleaned_data
 
-def process_excel_sims(excel_path, column_mapping, sheet_name):
-    """
-    Procesa la pestaña 'sheet_name' de un Excel para SIMs, usando la asignación
-    de columnas que haya seleccionado el usuario.
-    """
-    workbook = openpyxl.load_workbook(excel_path, data_only=True)
+def process_excel_sims(excel_file, column_mapping, sheet_name):
+    workbook = openpyxl.load_workbook(excel_file, data_only=True)
     sheet = workbook[sheet_name]
     all_data = []
     header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True))
@@ -405,25 +355,19 @@ def process_excel_sims(excel_path, column_mapping, sheet_name):
                 else:
                     cell_value = str(cell) if cell is not None else ""
             row_data.append(cell_value)
-        # Añadir el nombre de la pestaña como 'Compania'
-        row_data.append(sheet_name)
+        row_data.append(sheet_name)  # Se agrega el nombre de la pestaña como 'Compania'
         all_data.append(row_data)
-
     return all_data
 
-def process_csv_sims(csv_path, column_mapping):
-    """
-    Procesa un CSV para SIMs. Utiliza el nombre de la columna y 
-    la posición de columna (column_mapping) para extraer datos.
-    """
+def process_csv_sims(csv_file, column_mapping):
     try:
-        df = pd.read_csv(csv_path, dtype=str)
+        df = pd.read_csv(csv_file, dtype=str)
     except Exception as e:
-        logging.error(f"Error leyendo CSV '{csv_path}': {e}")
+        logging.error(f"Error leyendo CSV: {e}")
         return []
     
     all_data = []
-    company_name = os.path.splitext(os.path.basename(csv_path))[0]
+    company_name = os.path.splitext(os.path.basename(csv_file.name))[0]
     
     for index, row in df.iterrows():
         row_data = []
@@ -439,468 +383,370 @@ def process_csv_sims(csv_path, column_mapping):
                 else:
                     cell = ""
             row_data.append(cell)
-        # Añadir nombre del archivo (sin extensión) como 'Compania'
         row_data.append(company_name)
         all_data.append(row_data)
     return all_data
 
-
-# -----------------------------------------------------------------------------
-# APLICACIÓN STREAMLIT UNIFICADA
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- 
+# APLICACIÓN STREAMLIT UNIFICADA 
+# ----------------------------------------------------------------------------- 
 
 st.title("Aplicación Unificada: Carga de Datos de Plataformas y SIMs")
-
-# Creamos dos pestañas de Streamlit:
 tabs = st.tabs(["Plataformas", "SIMs"])
 
-
-# -----------------------------------------------------------------------------
-# TAB DE PLATAFORMAS
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- 
+# TAB DE PLATAFORMAS 
+# ----------------------------------------------------------------------------- 
 with tabs[0]:
     st.header("Carga y Homologación de Datos desde Excel (Plataformas)")
-
-    # Ruta predeterminada para archivos de Plataformas
-    default_excel_path_plataformas = r"C:\Users\capac\OneDrive\Escritorio\Actividades de Sims\bd_sims"
-    st.write("Ruta predeterminada para búsqueda de archivos de plataformas:", default_excel_path_plataformas)
-
-    # Generamos la ruta de la base de datos con la fecha de hoy, para Plataformas
-    today_db_path_plataformas = os.path.join(
-        default_excel_path_plataformas, 
-        f'{datetime.now().strftime("%Y-%m-%d")}_plataformas.db'
-    )
+    uploaded_file = st.file_uploader("Sube el archivo Excel para Plataformas", type=["xlsx"])
     
-    # Si la base ya existe, damos la opción de eliminarla
-    if os.path.exists(today_db_path_plataformas):
-        st.warning(f"Ya existe una base de datos para hoy (Plataformas): {os.path.basename(today_db_path_plataformas)}")
-        if st.button("Eliminar base de datos existente (Plataformas)"):
-            try:
-                os.remove(today_db_path_plataformas)
-                st.success("Base de datos de plataformas eliminada correctamente.")
-            except Exception as e:
-                st.error(f"Error al eliminar la base de datos de plataformas: {str(e)}")
+    if uploaded_file is not None:
+        # Generamos la base de datos en el directorio actual con la fecha de hoy
+        today_db_path_plataformas = f"{datetime.now().strftime('%Y-%m-%d')}_plataformas.db"
+        if os.path.exists(today_db_path_plataformas):
+            st.warning(f"Ya existe una base de datos para hoy (Plataformas): {os.path.basename(today_db_path_plataformas)}")
+            if st.button("Eliminar base de datos existente (Plataformas)"):
+                try:
+                    os.remove(today_db_path_plataformas)
+                    st.success("Base de datos de plataformas eliminada correctamente.")
+                except Exception as e:
+                    st.error(f"Error al eliminar la base de datos de plataformas: {str(e)}")
 
-    # Buscamos archivos Excel en la carpeta
-    if os.path.isdir(default_excel_path_plataformas):
-        excel_files = [f for f in os.listdir(default_excel_path_plataformas) if f.endswith('.xlsx')]
-        if excel_files:
-            selected_file_plataformas = st.selectbox("Selecciona un archivo Excel (Plataformas)", excel_files)
-            
-            if st.button("Ejecutar procesamiento de datos (Plataformas)"):
-                # Procesamos el archivo Excel
-                uploaded_file_path = os.path.join(default_excel_path_plataformas, selected_file_plataformas)
-                all_data, invalid_data, total_records = process_excel_file_plataformas(
-                    uploaded_file_path, 
-                    default_mappings_plataformas
+        if st.button("Ejecutar procesamiento de datos (Plataformas)"):
+            all_data, invalid_data, total_records = process_excel_file_plataformas(uploaded_file, default_mappings_plataformas)
+            create_database_plataformas(today_db_path_plataformas)
+
+            conn = sqlite3.connect(today_db_path_plataformas)
+            cursor = conn.cursor()
+            not_inserted = []
+            inserted = []
+            columns_plat = [
+                'Nombre', 'Cliente_Cuenta', 'Tipo_de_Dispositivo', 'IMEI', 'ICCID',
+                'Fecha_de_Activacion', 'Fecha_de_Desactivacion', 'Hora_de_Ultimo_Mensaje',
+                'Ultimo_Reporte', 'Vehiculo', 'Servicios', 'Grupo', 'Telefono', 'Origen', 'Fecha_Archivo'
+            ]
+            for record in all_data:
+                try:
+                    cursor.execute('''
+                        INSERT INTO datos (
+                            Nombre, Cliente_Cuenta, Tipo_de_Dispositivo, IMEI, ICCID,
+                            Fecha_de_Activacion, Fecha_de_Desactivacion, Hora_de_Ultimo_Mensaje,
+                            Ultimo_Reporte, Vehiculo, Servicios, Grupo, Telefono, Origen, Fecha_Archivo
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', record)
+                    inserted.append(record)
+                except sqlite3.IntegrityError:
+                    not_inserted.append(record)
+            conn.commit()
+            conn.close()
+
+            df_inserted = pd.DataFrame(inserted, columns=columns_plat)
+            df_not_inserted = pd.DataFrame(not_inserted, columns=columns_plat)
+
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total de Registros", total_records)
+            with col2:
+                st.metric("Registros Insertados", len(inserted))
+            with col3:
+                st.metric("Registros No Insertados", len(not_inserted))
+            with col4:
+                st.metric("Registros Inválidos", len(invalid_data))
+
+            if len(not_inserted) > 0:
+                st.write("### Registros No Insertados (Duplicados)")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    unique_clients = sorted(df_not_inserted['Cliente_Cuenta'].dropna().unique())
+                    selected_client_ni = st.multiselect(
+                        'Filtrar por Cliente (No Insertados):',
+                        options=unique_clients, 
+                        default=[]
+                    )
+                with col_b:
+                    unique_origins = sorted(df_not_inserted['Origen'].dropna().unique())
+                    selected_origin_ni = st.multiselect(
+                        'Filtrar por Origen (No Insertados):',
+                        options=unique_origins, 
+                        default=[]
+                    )
+                df_filtered_ni = df_not_inserted.copy()
+                if selected_client_ni:
+                    df_filtered_ni = df_filtered_ni[df_filtered_ni['Cliente_Cuenta'].isin(selected_client_ni)]
+                if selected_origin_ni:
+                    df_filtered_ni = df_filtered_ni[df_filtered_ni['Origen'].isin(selected_origin_ni)]
+                st.dataframe(df_filtered_ni, use_container_width=True)
+                csv_ni = df_filtered_ni.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Descargar registros no insertados",
+                    data=csv_ni,
+                    file_name="registros_no_insertados_plataformas.csv",
+                    mime='text/csv'
                 )
 
-                # Creamos la base si no existe
-                create_database_plataformas(today_db_path_plataformas)
+            st.write("## Resumen por Plataforma")
+            sheets = list(default_mappings_plataformas.keys())
+            summary_data = []
+            for sheet in sheets:
+                sheet_data = [record for record in all_data if record[-2] == sheet]
+                total_sheet = len(sheet_data)
+                percentage = (total_sheet / total_records * 100) if total_records > 0 else 0
+                summary_data.append({
+                    "Plataforma": sheet,
+                    "Total Registros": total_sheet,
+                    "Porcentaje": f"{percentage:.1f}%"
+                })
+            df_summary = pd.DataFrame(summary_data)
+            st.dataframe(df_summary, use_container_width=True)
+            st.write("### Distribución de Registros por Plataforma")
+            if not df_summary.empty:
+                df_summary['Porcentaje_Num'] = df_summary['Porcentaje'].str.rstrip('%').astype(float)
+                chart_data = pd.DataFrame({
+                    'Plataforma': df_summary['Plataforma'],
+                    'Porcentaje': df_summary['Porcentaje_Num']
+                })
+                st.bar_chart(chart_data.set_index('Plataforma'))
 
-                # Insertamos los datos en la DB
-                conn = sqlite3.connect(today_db_path_plataformas)
-                cursor = conn.cursor()
-
-                not_inserted = []  # Duplicados
-                inserted = []
-                columns_plat = [
-                    'Nombre', 'Cliente_Cuenta', 'Tipo_de_Dispositivo', 'IMEI', 'ICCID',
-                    'Fecha_de_Activacion', 'Fecha_de_Desactivacion', 'Hora_de_Ultimo_Mensaje',
-                    'Ultimo_Reporte', 'Vehiculo', 'Servicios', 'Grupo', 'Telefono', 'Origen', 'Fecha_Archivo'
-                ]
-
-                for record in all_data:
-                    try:
-                        cursor.execute('''
-                            INSERT INTO datos (
-                                Nombre, Cliente_Cuenta, Tipo_de_Dispositivo, IMEI, ICCID,
-                                Fecha_de_Activacion, Fecha_de_Desactivacion, Hora_de_Ultimo_Mensaje,
-                                Ultimo_Reporte, Vehiculo, Servicios, Grupo, Telefono, Origen, Fecha_Archivo
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', record)
-                        inserted.append(record)
-                    except sqlite3.IntegrityError:
-                        not_inserted.append(record)
-
-                conn.commit()
-                conn.close()
-
-                df_inserted = pd.DataFrame(inserted, columns=columns_plat)
-                df_not_inserted = pd.DataFrame(not_inserted, columns=columns_plat)
-
-                # Métricas finales
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total de Registros", total_records)
-                with col2:
-                    st.metric("Registros Insertados", len(inserted))
-                with col3:
-                    st.metric("Registros No Insertados", len(not_inserted))
-                with col4:
-                    st.metric("Registros Inválidos", len(invalid_data))
-
-                # Mostrar los duplicados (no insertados)
-                if len(not_inserted) > 0:
-                    st.write("### Registros No Insertados (Duplicados)")
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        unique_clients = sorted(df_not_inserted['Cliente_Cuenta'].dropna().unique())
-                        selected_client_ni = st.multiselect(
-                            'Filtrar por Cliente (No Insertados):',
-                            options=unique_clients, 
-                            default=[]
-                        )
-                    with col_b:
-                        unique_origins = sorted(df_not_inserted['Origen'].dropna().unique())
-                        selected_origin_ni = st.multiselect(
-                            'Filtrar por Origen (No Insertados):',
-                            options=unique_origins, 
-                            default=[]
-                        )
-
-                    df_filtered_ni = df_not_inserted.copy()
-                    if selected_client_ni:
-                        df_filtered_ni = df_filtered_ni[df_filtered_ni['Cliente_Cuenta'].isin(selected_client_ni)]
-                    if selected_origin_ni:
-                        df_filtered_ni = df_filtered_ni[df_filtered_ni['Origen'].isin(selected_origin_ni)]
-                    
-                    st.dataframe(df_filtered_ni, use_container_width=True)
-                    
-                    # Botón para descargar CSV
-                    csv_ni = df_filtered_ni.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="Descargar registros no insertados",
-                        data=csv_ni,
-                        file_name="registros_no_insertados_plataformas.csv",
-                        mime='text/csv'
-                    )
-
-                # Resumen por plataforma (según 'Origen')
-                st.write("## Resumen por Plataforma")
-                sheets = list(default_mappings_plataformas.keys())
-                summary_data = []
-                for sheet in sheets:
-                    # El penúltimo campo es 'Origen' => record[-2]
-                    sheet_data = [record for record in all_data if record[-2] == sheet]
-                    total_sheet = len(sheet_data)
+            platform_tabs = st.tabs(sheets)
+            for i, sheet in enumerate(sheets):
+                with platform_tabs[i]:
+                    st.write(f"## Análisis de {sheet}")
+                    sub_data = [record for record in all_data if record[-2] == sheet]
+                    total_sheet = len(sub_data)
                     percentage = (total_sheet / total_records * 100) if total_records > 0 else 0
-                    summary_data.append({
-                        "Plataforma": sheet,
-                        "Total Registros": total_sheet,
-                        "Porcentaje": f"{percentage:.1f}%"
-                    })
-
-                df_summary = pd.DataFrame(summary_data)
-                st.dataframe(df_summary, use_container_width=True)
-
-                st.write("### Distribución de Registros por Plataforma")
-                if not df_summary.empty:
-                    df_summary['Porcentaje_Num'] = df_summary['Porcentaje'].str.rstrip('%').astype(float)
-                    chart_data = pd.DataFrame({
-                        'Plataforma': df_summary['Plataforma'],
-                        'Porcentaje': df_summary['Porcentaje_Num']
-                    })
-                    st.bar_chart(chart_data.set_index('Plataforma'))
-                
-                # Crear pestañas separadas para cada plataforma
-                platform_tabs = st.tabs(sheets)
-                for i, sheet in enumerate(sheets):
-                    with platform_tabs[i]:
-                        st.write(f"## Análisis de {sheet}")
-                        sub_data = [record for record in all_data if record[-2] == sheet]
-                        total_sheet = len(sub_data)
-                        percentage = (total_sheet / total_records * 100) if total_records > 0 else 0
-
-                        st.write("### Resumen de la Plataforma")
-                        col_s1, col_s2, col_s3 = st.columns(3)
-                        with col_s1:
-                            st.metric("Total Registros", total_sheet)
-                        with col_s2:
-                            st.metric("Porcentaje del Total", f"{percentage:.1f}%")
-                        with col_s3:
-                            mapped_fields = sum(1 for v in default_mappings_plataformas[sheet].values() if v is not None)
-                            st.metric("Campos Mapeados", mapped_fields)
-
-                        # Tabla filtrable
-                        if total_sheet > 0:
-                            df_sheet = pd.DataFrame(sub_data, columns=columns_plat)
-                            st.write("### Datos Filtrables")
-                            col_sf1, col_sf2 = st.columns(2)
-                            with col_sf1:
-                                unique_clients_2 = sorted(df_sheet['Cliente_Cuenta'].dropna().unique())
-                                filter_client_2 = st.multiselect(
-                                    "Filtrar por Cliente:",
-                                    unique_clients_2, 
-                                    default=[]
-                                )
-                            with col_sf2:
-                                unique_dev_2 = sorted(df_sheet['Tipo_de_Dispositivo'].dropna().unique())
-                                filter_dev_2 = st.multiselect(
-                                    "Filtrar por Tipo de Dispositivo:",
-                                    unique_dev_2, 
-                                    default=[]
-                                )
-
-                            df_sheet_filtered = df_sheet.copy()
-                            if filter_client_2:
-                                df_sheet_filtered = df_sheet_filtered[df_sheet_filtered['Cliente_Cuenta'].isin(filter_client_2)]
-                            if filter_dev_2:
-                                df_sheet_filtered = df_sheet_filtered[df_sheet_filtered['Tipo_de_Dispositivo'].isin(filter_dev_2)]
-
-                            st.dataframe(df_sheet_filtered, use_container_width=True)
-                            
-                            csv_sheet = df_sheet_filtered.to_csv(index=False).encode('utf-8')
-                            st.download_button(
-                                label=f"Descargar Datos de {sheet}",
-                                data=csv_sheet,
-                                file_name=f"{sheet}_datos_plataformas.csv",
-                                mime='text/csv'
+                    st.write("### Resumen de la Plataforma")
+                    col_s1, col_s2, col_s3 = st.columns(3)
+                    with col_s1:
+                        st.metric("Total Registros", total_sheet)
+                    with col_s2:
+                        st.metric("Porcentaje del Total", f"{percentage:.1f}%")
+                    with col_s3:
+                        mapped_fields = sum(1 for v in default_mappings_plataformas[sheet].values() if v is not None)
+                        st.metric("Campos Mapeados", mapped_fields)
+                    if total_sheet > 0:
+                        df_sheet = pd.DataFrame(sub_data, columns=columns_plat)
+                        st.write("### Datos Filtrables")
+                        col_sf1, col_sf2 = st.columns(2)
+                        with col_sf1:
+                            unique_clients_2 = sorted(df_sheet['Cliente_Cuenta'].dropna().unique())
+                            filter_client_2 = st.multiselect(
+                                "Filtrar por Cliente:",
+                                unique_clients_2, 
+                                default=[]
                             )
-                        else:
-                            st.warning(f"No hay registros para {sheet}.")
-        else:
-            st.warning("No se encontraron archivos Excel en la carpeta para Plataformas.")
-    else:
-        st.error("La ruta de plataformas no es válida o no existe.")
+                        with col_sf2:
+                            unique_dev_2 = sorted(df_sheet['Tipo_de_Dispositivo'].dropna().unique())
+                            filter_dev_2 = st.multiselect(
+                                "Filtrar por Tipo de Dispositivo:",
+                                unique_dev_2, 
+                                default=[]
+                            )
+                        df_sheet_filtered = df_sheet.copy()
+                        if filter_client_2:
+                            df_sheet_filtered = df_sheet_filtered[df_sheet_filtered['Cliente_Cuenta'].isin(filter_client_2)]
+                        if filter_dev_2:
+                            df_sheet_filtered = df_sheet_filtered[df_sheet_filtered['Tipo_de_Dispositivo'].isin(filter_dev_2)]
+                        st.dataframe(df_sheet_filtered, use_container_width=True)
+                        csv_sheet = df_sheet_filtered.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label=f"Descargar Datos de {sheet}",
+                            data=csv_sheet,
+                            file_name=f"{sheet}_datos_plataformas.csv",
+                            mime='text/csv'
+                        )
+                    else:
+                        st.warning(f"No hay registros para {sheet}.")
 
-
-# -----------------------------------------------------------------------------
-# TAB DE SIMs
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- 
+# TAB DE SIMs 
+# ----------------------------------------------------------------------------- 
 with tabs[1]:
     st.header("Carga de Excel/CSV y Homologación de Base de Datos (SIMs)")
-
-    # Ruta por defecto para SIMs
-    default_folder_path_sims = r"C:\Users\capac\OneDrive\Escritorio\Actividades de Sims\bd_sims"
-    st.write("Ruta predeterminada para archivos de SIMs:", default_folder_path_sims)
-
-    # DB por defecto para SIMs
-    default_db_path_sims = os.path.join(default_folder_path_sims, 'sims_hoy.db')
+    st.write("Sube los archivos Excel o CSV para SIMs")
     
-    # Inputs para carpeta y DB
-    folder_path = st.text_input(
-        "Ingresa la ruta de la carpeta con archivos Excel/CSV para SIMs:",
-        value=default_folder_path_sims
-    )
-    db_path_sims = st.text_input(
-        "Ingresa la ruta para la base de datos de SIMs:",
-        value=default_db_path_sims
-    )
+    uploaded_files_sims = st.file_uploader("Selecciona los archivos", type=["xlsx", "csv"], accept_multiple_files=True)
+    # Se crea la base de datos de SIMs en el directorio actual
+    db_path_sims = "sims_hoy.db"
+    
+    if uploaded_files_sims:
+        # Diccionario para guardar los mapeos (clave = nombre del archivo)
+        column_mapping = {}
 
-    # Listamos archivos .xlsx y .csv en la carpeta
-    if folder_path and os.path.isdir(folder_path):
-        files = [f for f in os.listdir(folder_path) if f.endswith('.xlsx') or f.endswith('.csv')]
-        st.write(f"Archivos encontrados para SIMs: {files}")
+        for uploaded_file in uploaded_files_sims:
+            st.write(f"### Archivo: {uploaded_file.name}")
+            if uploaded_file.name.endswith('.xlsx'):
+                # Procesamos Excel
+                uploaded_file.seek(0)
+                workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
+                column_mapping[uploaded_file.name] = {}
+                for sheet_name in workbook.sheetnames:
+                    st.subheader(f"Pestaña: {sheet_name}")
+                    header_row = next(workbook[sheet_name].iter_rows(min_row=1, max_row=1, values_only=True))
+                    header_row = [col if col else "" for col in header_row]
 
-        if files:
-            selected_files = st.multiselect("Selecciona los archivos Excel o CSV (SIMs):", files)
-
-            # Diccionario donde guardaremos el mapeo de columnas (archivo -> {pestaña: mapping})
-            column_mapping = {}
-
-            for file in selected_files:
-                file_path = os.path.join(folder_path, file)
-
-                # Contenedor para la información de cada sheet (si es Excel) 
-                # o la info global (si es CSV)
-                sheet_data = {}
-
-                if file.endswith('.xlsx'):
-                    # Procesamos Excel
-                    workbook = openpyxl.load_workbook(file_path, data_only=True)
-                    for sheet_name in workbook.sheetnames:
-                        st.subheader(f"Archivo Excel: {file} | Pestaña: {sheet_name}")
-
-                        # Si la pestaña coincide con un mapeo predefinido
-                        if sheet_name in default_mappings_sims:
-                            mapping = default_mappings_sims[sheet_name]
-                            header_row = next(workbook[sheet_name].iter_rows(min_row=1, max_row=1, values_only=True))
-                            header_row = [col if col else "" for col in header_row]
-                            
-                            # Intento de mapeo automático
-                            mapping_indices = {}
-                            mapping_valid = True
-                            for key_field, column_name in mapping.items():
-                                if column_name in header_row:
-                                    mapping_indices[key_field] = header_row.index(column_name)
-                                else:
-                                    mapping_valid = False
-                                    break
-                            
-                            if mapping_valid:
-                                sheet_data[sheet_name] = mapping_indices
-                                st.info("Mapeo automático aplicado con éxito.")
-                            else:
-                                # Mapeo manual
-                                st.warning("No se encontró correspondencia para alguna columna. Selecciona manualmente:")
-                                columns_found = header_row
-
-                                iccid_col = st.selectbox("Columna para ICCID:", options=columns_found, key=f"{file}_{sheet_name}_iccid")
-                                telefono_col = st.selectbox("Columna para TELEFONO:", options=columns_found, key=f"{file}_{sheet_name}_telefono")
-                                estado_sim_col = st.selectbox("Columna para ESTADO DEL SIM:", options=columns_found, key=f"{file}_{sheet_name}_estado")
-                                en_sesion_col = st.selectbox("Columna para EN SESION:", options=columns_found, key=f"{file}_{sheet_name}_sesion")
-                                consumo_mb_col = st.selectbox("Columna para ConsumoMb:", options=columns_found, key=f"{file}_{sheet_name}_consumo")
-
-                                sheet_data[sheet_name] = {
-                                    'ICCID': columns_found.index(iccid_col),
-                                    'TELEFONO': columns_found.index(telefono_col),
-                                    'ESTADO DEL SIM': columns_found.index(estado_sim_col),
-                                    'EN SESION': columns_found.index(en_sesion_col),
-                                    'ConsumoMb': columns_found.index(consumo_mb_col)
-                                }
-
-                        else:
-                            # Pestaña no definida en el mapping => mapeo manual
-                            st.info("Pestaña no definida en mapeo por defecto. Selecciona manualmente:")
-                            header_row = next(workbook[sheet_name].iter_rows(min_row=1, max_row=1, values_only=True))
-                            header_row = [col if col else "" for col in header_row]
-
-                            iccid_col = st.selectbox("Columna para ICCID:", options=header_row, key=f"{file}_{sheet_name}_iccid_man")
-                            telefono_col = st.selectbox("Columna para TELEFONO:", options=header_row, key=f"{file}_{sheet_name}_tel_man")
-                            estado_sim_col = st.selectbox("Columna para ESTADO DEL SIM:", options=header_row, key=f"{file}_{sheet_name}_estado_man")
-                            en_sesion_col = st.selectbox("Columna para EN SESION:", options=header_row, key=f"{file}_{sheet_name}_sesion_man")
-                            consumo_mb_col = st.selectbox("Columna para ConsumoMb:", options=header_row, key=f"{file}_{sheet_name}_consumo_man")
-
-                            sheet_data[sheet_name] = {
-                                'ICCID': header_row.index(iccid_col),
-                                'TELEFONO': header_row.index(telefono_col),
-                                'ESTADO DEL SIM': header_row.index(estado_sim_col),
-                                'EN SESION': header_row.index(en_sesion_col),
-                                'ConsumoMb': header_row.index(consumo_mb_col)
-                            }
-
-                    column_mapping[file] = sheet_data
-
-                elif file.endswith('.csv'):
-                    # Procesamos CSV
-                    st.subheader(f"Archivo CSV: {file}")
-                    df_csv = pd.read_csv(file_path, dtype=str)
-                    columns_csv = df_csv.columns.tolist()
-                    
-                    # Verificamos si el nombre del archivo (sin extensión) coincide con algún mapeo
-                    file_name_no_ext = os.path.splitext(file)[0]
-                    if file_name_no_ext in default_mappings_sims:
-                        mapping = default_mappings_sims[file_name_no_ext]
+                    if sheet_name in default_mappings_sims:
+                        mapping = default_mappings_sims[sheet_name]
                         mapping_indices = {}
                         mapping_valid = True
                         for key_field, column_name in mapping.items():
-                            if column_name in columns_csv:
-                                mapping_indices[key_field] = columns_csv.index(column_name)
+                            if column_name in header_row:
+                                mapping_indices[key_field] = header_row.index(column_name)
                             else:
                                 mapping_valid = False
                                 break
                         if mapping_valid:
-                            column_mapping[file] = mapping_indices
-                            st.info("Mapeo automático aplicado con éxito para CSV.")
+                            column_mapping[uploaded_file.name][sheet_name] = mapping_indices
+                            st.info("Mapeo automático aplicado con éxito.")
                         else:
-                            st.warning("Algunas columnas no se encontraron. Selección manual:")
-                            iccid_col = st.selectbox("Columna para ICCID:", options=columns_csv, key=f"{file}_iccid_man")
-                            telefono_col = st.selectbox("Columna para TELEFONO:", options=columns_csv, key=f"{file}_tel_man")
-                            estado_sim_col = st.selectbox("Columna para ESTADO DEL SIM:", options=columns_csv, key=f"{file}_estado_man")
-                            en_sesion_col = st.selectbox("Columna para EN SESION:", options=columns_csv, key=f"{file}_sesion_man")
-                            consumo_mb_col = st.selectbox("Columna para ConsumoMb:", options=columns_csv, key=f"{file}_consumo_man")
-
-                            column_mapping[file] = {
-                                'ICCID': columns_csv.index(iccid_col),
-                                'TELEFONO': columns_csv.index(telefono_col),
-                                'ESTADO DEL SIM': columns_csv.index(estado_sim_col),
-                                'EN SESION': columns_csv.index(en_sesion_col),
-                                'ConsumoMb': columns_csv.index(consumo_mb_col)
+                            st.warning("No se encontró correspondencia para alguna columna. Selecciona manualmente:")
+                            columns_found = header_row
+                            iccid_col = st.selectbox("Columna para ICCID:", options=columns_found, key=f"{uploaded_file.name}_{sheet_name}_iccid")
+                            telefono_col = st.selectbox("Columna para TELEFONO:", options=columns_found, key=f"{uploaded_file.name}_{sheet_name}_telefono")
+                            estado_sim_col = st.selectbox("Columna para ESTADO DEL SIM:", options=columns_found, key=f"{uploaded_file.name}_{sheet_name}_estado")
+                            en_sesion_col = st.selectbox("Columna para EN SESION:", options=columns_found, key=f"{uploaded_file.name}_{sheet_name}_sesion")
+                            consumo_mb_col = st.selectbox("Columna para ConsumoMb:", options=columns_found, key=f"{uploaded_file.name}_{sheet_name}_consumo")
+                            column_mapping[uploaded_file.name][sheet_name] = {
+                                'ICCID': columns_found.index(iccid_col),
+                                'TELEFONO': columns_found.index(telefono_col),
+                                'ESTADO DEL SIM': columns_found.index(estado_sim_col),
+                                'EN SESION': columns_found.index(en_sesion_col),
+                                'ConsumoMb': columns_found.index(consumo_mb_col)
                             }
                     else:
-                        # Mapeo manual total
-                        st.info("CSV sin mapeo predefinido. Selección manual de columnas:")
-                        iccid_col = st.selectbox("Columna para ICCID:", options=columns_csv, key=f"{file}_iccid_man2")
-                        telefono_col = st.selectbox("Columna para TELEFONO:", options=columns_csv, key=f"{file}_tel_man2")
-                        estado_sim_col = st.selectbox("Columna para ESTADO DEL SIM:", options=columns_csv, key=f"{file}_estado_man2")
-                        en_sesion_col = st.selectbox("Columna para EN SESION:", options=columns_csv, key=f"{file}_sesion_man2")
-                        consumo_mb_col = st.selectbox("Columna para ConsumoMb:", options=columns_csv, key=f"{file}_consumo_man2")
-
-                        column_mapping[file] = {
+                        st.info("Pestaña no definida en mapeo por defecto. Selecciona manualmente:")
+                        header_row = next(workbook[sheet_name].iter_rows(min_row=1, max_row=1, values_only=True))
+                        header_row = [col if col else "" for col in header_row]
+                        iccid_col = st.selectbox("Columna para ICCID:", options=header_row, key=f"{uploaded_file.name}_{sheet_name}_iccid_man")
+                        telefono_col = st.selectbox("Columna para TELEFONO:", options=header_row, key=f"{uploaded_file.name}_{sheet_name}_tel_man")
+                        estado_sim_col = st.selectbox("Columna para ESTADO DEL SIM:", options=header_row, key=f"{uploaded_file.name}_{sheet_name}_estado_man")
+                        en_sesion_col = st.selectbox("Columna para EN SESION:", options=header_row, key=f"{uploaded_file.name}_{sheet_name}_sesion_man")
+                        consumo_mb_col = st.selectbox("Columna para ConsumoMb:", options=header_row, key=f"{uploaded_file.name}_{sheet_name}_consumo_man")
+                        column_mapping[uploaded_file.name][sheet_name] = {
+                            'ICCID': header_row.index(iccid_col),
+                            'TELEFONO': header_row.index(telefono_col),
+                            'ESTADO DEL SIM': header_row.index(estado_sim_col),
+                            'EN SESION': header_row.index(en_sesion_col),
+                            'ConsumoMb': header_row.index(consumo_mb_col)
+                        }
+            elif uploaded_file.name.endswith('.csv'):
+                st.subheader("Archivo CSV")
+                try:
+                    df_csv = pd.read_csv(uploaded_file, dtype=str)
+                except Exception as e:
+                    st.error(f"Error leyendo CSV: {e}")
+                    continue
+                columns_csv = df_csv.columns.tolist()
+                file_name_no_ext = os.path.splitext(uploaded_file.name)[0]
+                if file_name_no_ext in default_mappings_sims:
+                    mapping = default_mappings_sims[file_name_no_ext]
+                    mapping_indices = {}
+                    mapping_valid = True
+                    for key_field, column_name in mapping.items():
+                        if column_name in columns_csv:
+                            mapping_indices[key_field] = columns_csv.index(column_name)
+                        else:
+                            mapping_valid = False
+                            break
+                    if mapping_valid:
+                        column_mapping[uploaded_file.name] = mapping_indices
+                        st.info("Mapeo automático aplicado con éxito para CSV.")
+                    else:
+                        st.warning("Algunas columnas no se encontraron. Selección manual:")
+                        iccid_col = st.selectbox("Columna para ICCID:", options=columns_csv, key=f"{uploaded_file.name}_iccid_man")
+                        telefono_col = st.selectbox("Columna para TELEFONO:", options=columns_csv, key=f"{uploaded_file.name}_tel_man")
+                        estado_sim_col = st.selectbox("Columna para ESTADO DEL SIM:", options=columns_csv, key=f"{uploaded_file.name}_estado_man")
+                        en_sesion_col = st.selectbox("Columna para EN SESION:", options=columns_csv, key=f"{uploaded_file.name}_sesion_man")
+                        consumo_mb_col = st.selectbox("Columna para ConsumoMb:", options=columns_csv, key=f"{uploaded_file.name}_consumo_man")
+                        column_mapping[uploaded_file.name] = {
                             'ICCID': columns_csv.index(iccid_col),
                             'TELEFONO': columns_csv.index(telefono_col),
                             'ESTADO DEL SIM': columns_csv.index(estado_sim_col),
                             'EN SESION': columns_csv.index(en_sesion_col),
                             'ConsumoMb': columns_csv.index(consumo_mb_col)
                         }
+                else:
+                    st.info("CSV sin mapeo predefinido. Selección manual de columnas:")
+                    iccid_col = st.selectbox("Columna para ICCID:", options=columns_csv, key=f"{uploaded_file.name}_iccid_man2")
+                    telefono_col = st.selectbox("Columna para TELEFONO:", options=columns_csv, key=f"{uploaded_file.name}_tel_man2")
+                    estado_sim_col = st.selectbox("Columna para ESTADO DEL SIM:", options=columns_csv, key=f"{uploaded_file.name}_estado_man2")
+                    en_sesion_col = st.selectbox("Columna para EN SESION:", options=columns_csv, key=f"{uploaded_file.name}_sesion_man2")
+                    consumo_mb_col = st.selectbox("Columna para ConsumoMb:", options=columns_csv, key=f"{uploaded_file.name}_consumo_man2")
+                    column_mapping[uploaded_file.name] = {
+                        'ICCID': columns_csv.index(iccid_col),
+                        'TELEFONO': columns_csv.index(telefono_col),
+                        'ESTADO DEL SIM': columns_csv.index(estado_sim_col),
+                        'EN SESION': columns_csv.index(en_sesion_col),
+                        'ConsumoMb': columns_csv.index(consumo_mb_col)
+                    }
 
-            # Botón final para procesar todos los archivos seleccionados de SIMs
-            if st.button("Procesar Archivos de SIMs"):
-                create_database_sims(db_path_sims)
-                logging.info(f"Base de datos de SIMs creada/verificada: {db_path_sims}")
+        if st.button("Procesar Archivos de SIMs"):
+            create_database_sims(db_path_sims)
+            logging.info(f"Base de datos de SIMs creada/verificada: {db_path_sims}")
 
-                total_records_sims = 0
-                total_inserted_sims = 0
-                stats_by_file = {}
+            total_records_sims = 0
+            total_inserted_sims = 0
+            stats_by_file = {}
 
-                for file in selected_files:
-                    file_path = os.path.join(folder_path, file)
-
-                    if file.endswith('.xlsx'):
-                        # Es un Excel con varias pestañas
-                        workbook = openpyxl.load_workbook(file_path, data_only=True)
-                        stats_by_file[file] = {'sheets': {}}
-
-                        for sheet_name in column_mapping[file].keys():
-                            data = process_excel_sims(file_path, column_mapping[file][sheet_name], sheet_name)
-                            data_cleaned = clean_iccid_telefono_consumo(data)
-                            processed, inserted = insert_data_sims(db_path_sims, data_cleaned)
-                            stats_by_file[file]['sheets'][sheet_name] = {
-                                'processed': processed,
-                                'inserted': inserted
-                            }
-                            total_records_sims += processed
-                            total_inserted_sims += inserted
-
-                    elif file.endswith('.csv'):
-                        # Es un CSV
-                        data = process_csv_sims(file_path, column_mapping[file])
+            for uploaded_file in uploaded_files_sims:
+                if uploaded_file.name.endswith('.xlsx'):
+                    uploaded_file.seek(0)
+                    workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
+                    stats_by_file[uploaded_file.name] = {'sheets': {}}
+                    for sheet_name in column_mapping[uploaded_file.name].keys():
+                        # Es importante reiniciar el puntero en el archivo para cada lectura
+                        uploaded_file.seek(0)
+                        data = process_excel_sims(uploaded_file, column_mapping[uploaded_file.name][sheet_name], sheet_name)
                         data_cleaned = clean_iccid_telefono_consumo(data)
                         processed, inserted = insert_data_sims(db_path_sims, data_cleaned)
-                        stats_by_file[file] = {
+                        stats_by_file[uploaded_file.name]['sheets'][sheet_name] = {
                             'processed': processed,
                             'inserted': inserted
                         }
                         total_records_sims += processed
                         total_inserted_sims += inserted
+                elif uploaded_file.name.endswith('.csv'):
+                    uploaded_file.seek(0)
+                    data = process_csv_sims(uploaded_file, column_mapping[uploaded_file.name])
+                    data_cleaned = clean_iccid_telefono_consumo(data)
+                    processed, inserted = insert_data_sims(db_path_sims, data_cleaned)
+                    stats_by_file[uploaded_file.name] = {
+                        'processed': processed,
+                        'inserted': inserted
+                    }
+                    total_records_sims += processed
+                    total_inserted_sims += inserted
 
-                # Resultados
-                st.success("¡Procesamiento de SIMs completado!")
-                st.write(f"Total de registros procesados: {total_records_sims}")
-                st.write(f"Total de registros insertados (evitando duplicados): {total_inserted_sims}")
+            st.success("¡Procesamiento de SIMs completado!")
+            st.write(f"Total de registros procesados: {total_records_sims}")
+            st.write(f"Total de registros insertados (evitando duplicados): {total_inserted_sims}")
 
-                # Sección de estadísticas
-                st.write("### Estadísticas de Procesamiento por Archivo/Pestaña")
-                for file, info in stats_by_file.items():
-                    st.subheader(f"Archivo: {file}")
-                    if 'sheets' in info:
-                        # Excel
-                        for sheet, sheet_stats in info['sheets'].items():
-                            processed = sheet_stats['processed']
-                            inserted = sheet_stats['inserted']
-                            insertion_rate = (inserted / processed * 100) if processed else 0
-                            st.write(f"**Pestaña:** {sheet}")
-                            col_a1, col_a2, col_a3 = st.columns(3)
-                            with col_a1:
-                                st.metric("Registros Procesados", processed)
-                            with col_a2:
-                                st.metric("Registros Insertados", inserted)
-                            with col_a3:
-                                st.metric("Tasa de Inserción", f"{insertion_rate:.2f}%")
-                    else:
-                        # CSV
-                        processed = info['processed']
-                        inserted = info['inserted']
+            st.write("### Estadísticas de Procesamiento por Archivo/Pestaña")
+            for file, info in stats_by_file.items():
+                st.subheader(f"Archivo: {file}")
+                if 'sheets' in info:
+                    for sheet, sheet_stats in info['sheets'].items():
+                        processed = sheet_stats['processed']
+                        inserted = sheet_stats['inserted']
                         insertion_rate = (inserted / processed * 100) if processed else 0
-                        col_b1, col_b2, col_b3 = st.columns(3)
-                        with col_b1:
+                        st.write(f"**Pestaña:** {sheet}")
+                        col_a1, col_a2, col_a3 = st.columns(3)
+                        with col_a1:
                             st.metric("Registros Procesados", processed)
-                        with col_b2:
+                        with col_a2:
                             st.metric("Registros Insertados", inserted)
-                        with col_b3:
+                        with col_a3:
                             st.metric("Tasa de Inserción", f"{insertion_rate:.2f}%")
-        else:
-            st.warning("No se encontraron archivos Excel o CSV en la carpeta especificada para SIMs.")
+                else:
+                    processed = info['processed']
+                    inserted = info['inserted']
+                    insertion_rate = (inserted / processed * 100) if processed else 0
+                    col_b1, col_b2, col_b3 = st.columns(3)
+                    with col_b1:
+                        st.metric("Registros Procesados", processed)
+                    with col_b2:
+                        st.metric("Registros Insertados", inserted)
+                    with col_b3:
+                        st.metric("Tasa de Inserción", f"{insertion_rate:.2f}%")
     else:
-        st.error("La ruta para archivos de SIMs no es válida o no existe.")
+        st.warning("No se han subido archivos para SIMs.")
