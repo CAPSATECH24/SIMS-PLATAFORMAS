@@ -19,7 +19,6 @@ logging.basicConfig(
 
 # ----------------------------------------------------------------------------- 
 # BLOQUE 1: FUNCIONES Y LÓGICA PARA DATOS DE PLATAFORMAS 
-# (Basado en plataformas_hoy.py) 
 # ----------------------------------------------------------------------------- 
 
 default_mappings_plataformas = {
@@ -77,6 +76,7 @@ default_mappings_plataformas = {
 }
 
 def create_database_plataformas(db_path):
+    """Crea (o verifica) la tabla para plataformas en la base de datos SQLite."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute(''' 
@@ -103,6 +103,7 @@ def create_database_plataformas(db_path):
     conn.close()
 
 def insert_data_plataformas(db_path, data):
+    """Inserta una lista de tuplas en la tabla 'datos' de plataformas."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     try:
@@ -124,6 +125,7 @@ def insert_data_plataformas(db_path, data):
     return inserted
 
 def clean_telefono(telefono):
+    """Elimina caracteres no numéricos de un teléfono y lo devuelve como string."""
     if telefono:
         telefono = re.sub(r'\D', '', str(telefono))
         if telefono:
@@ -131,6 +133,8 @@ def clean_telefono(telefono):
     return None
 
 def extract_date_from_filename(filename):
+    """Extrae la fecha (formato YYYY-MM-DD) del nombre de un archivo. 
+       Si no la encuentra, devuelve la fecha actual."""
     match = re.search(r'\d{4}-\d{2}-\d{2}', filename)
     if match:
         return match.group(0)
@@ -138,6 +142,10 @@ def extract_date_from_filename(filename):
         return datetime.now().strftime('%Y-%m-%d')
 
 def process_excel_file_plataformas(excel_file, mappings):
+    """Procesa el archivo Excel para plataformas y devuelve:
+       - all_data: lista de tuplas listas para insertar,
+       - invalid_data: filas que no cumplen los requisitos,
+       - total_records: número total de filas leídas."""
     all_data = []
     invalid_data = []
     total_records = 0
@@ -160,6 +168,7 @@ def process_excel_file_plataformas(excel_file, mappings):
                 record = {}
                 is_valid = True
 
+                # Verificación mínima: que exista el campo "Cliente_Cuenta"
                 required_field = 'Cliente_Cuenta'
                 column_name = mapping.get(required_field)
                 value = row_dict.get(column_name) if column_name else None
@@ -196,7 +205,6 @@ def process_excel_file_plataformas(excel_file, mappings):
 
 # ----------------------------------------------------------------------------- 
 # BLOQUE 2: FUNCIONES Y LÓGICA PARA DATOS DE SIMs 
-# (Basado en set_sims-companias-unificadas.py) 
 # ----------------------------------------------------------------------------- 
 
 default_mappings_sims = {
@@ -259,6 +267,7 @@ default_mappings_sims = {
 }
 
 def create_database_sims(db_path):
+    """Crea (o verifica) la tabla para SIMs en la base de datos SQLite."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute(''' 
@@ -276,6 +285,7 @@ def create_database_sims(db_path):
     conn.close()
 
 def insert_data_sims(db_path, data):
+    """Inserta una lista de tuplas en la tabla 'sims'."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     records_before = cursor.execute("SELECT COUNT(*) FROM sims").fetchone()[0]
@@ -296,6 +306,7 @@ def insert_data_sims(db_path, data):
     return len(data), records_inserted
 
 def clean_iccid_telefono_consumo(data):
+    """Limpia los campos ICCID, TELEFONO y ConsumoMb para que contengan solo dígitos donde aplique."""
     cleaned_data = []
     for row in data:
         cleaned_row = list(row)
@@ -303,24 +314,28 @@ def clean_iccid_telefono_consumo(data):
         original_telefono = cleaned_row[1]
         original_consumo_mb = cleaned_row[4]
         
+        # Limpieza de ICCID
         if isinstance(original_iccid, float) and original_iccid.is_integer():
             cleaned_iccid = str(int(original_iccid))
         else:
             cleaned_iccid = str(original_iccid)
         cleaned_row[0] = ''.join(filter(str.isdigit, cleaned_iccid)) if cleaned_iccid else ""
         
+        # Limpieza de TELEFONO
         if isinstance(original_telefono, float) and original_telefono.is_integer():
             cleaned_telefono = str(int(original_telefono))
         else:
             cleaned_telefono = str(original_telefono)
         cleaned_row[1] = ''.join(filter(str.isdigit, cleaned_telefono)) if cleaned_telefono else ""
         
+        # Limpieza de ConsumoMb
         if original_consumo_mb:
             cleaned_consumo_mb = ''.join(filter(str.isdigit, str(original_consumo_mb)))
         else:
             cleaned_consumo_mb = ""
         cleaned_row[4] = cleaned_consumo_mb
         
+        # Normalización de ESTADO_DEL_SIM y EN_SESION
         cleaned_row[2] = cleaned_row[2].strip().lower() if cleaned_row[2] else ""
         cleaned_row[3] = cleaned_row[3].strip().lower() if cleaned_row[3] else ""
         
@@ -333,6 +348,7 @@ def clean_iccid_telefono_consumo(data):
     return cleaned_data
 
 def process_excel_sims(excel_file, column_mapping, sheet_name):
+    """Procesa una hoja de Excel para SIMs usando un mapeo de columnas."""
     workbook = openpyxl.load_workbook(excel_file, data_only=True)
     sheet = workbook[sheet_name]
     all_data = []
@@ -360,6 +376,7 @@ def process_excel_sims(excel_file, column_mapping, sheet_name):
     return all_data
 
 def process_csv_sims(csv_file, column_mapping):
+    """Procesa un archivo CSV para SIMs usando un mapeo de columnas."""
     try:
         df = pd.read_csv(csv_file, dtype=str)
     except Exception as e:
@@ -558,16 +575,27 @@ with tabs[0]:
                     else:
                         st.warning(f"No hay registros para {sheet}.")
 
+            # (Opcional) Si quieres también descargar el volcado .sql, descomenta estas líneas:
+            # with sqlite3.connect(today_db_path_plataformas) as conn:
+            #     sql_dump = "\n".join(conn.iterdump())
+            # st.download_button(
+            #     label="Descargar SQL generado (Plataformas)",
+            #     data=sql_dump,
+            #     file_name=f"{today_db_path_plataformas}.sql",
+            #     mime="text/sql"
+            # )
+
             # --------------------------
-            # NUEVA FUNCIONALIDAD: Descargar SQL generado de la base de datos de Plataformas
+            # Descarga del archivo .db directamente
             # --------------------------
-            with sqlite3.connect(today_db_path_plataformas) as conn:
-                sql_dump = "\n".join(conn.iterdump())
+            with open(today_db_path_plataformas, "rb") as db_file:
+                db_bytes = db_file.read()
+
             st.download_button(
-                label="Descargar SQL generado (Plataformas)",
-                data=sql_dump,
-                file_name=f"{today_db_path_plataformas}.sql",
-                mime="text/sql"
+                label="Descargar Base de Datos .db (Plataformas)",
+                data=db_bytes,
+                file_name=os.path.basename(today_db_path_plataformas),
+                mime="application/octet-stream"
             )
 
 # ----------------------------------------------------------------------------- 
@@ -760,17 +788,28 @@ with tabs[1]:
                         st.metric("Registros Insertados", inserted)
                     with col_b3:
                         st.metric("Tasa de Inserción", f"{insertion_rate:.2f}%")
-            
+
+            # (Opcional) Si quieres también el volcado .sql, descomenta:
+            # with sqlite3.connect(db_path_sims) as conn:
+            #     sql_dump_sims = "\n".join(conn.iterdump())
+            # st.download_button(
+            #     label="Descargar SQL generado (SIMs)",
+            #     data=sql_dump_sims,
+            #     file_name="sims_hoy.db.sql",
+            #     mime="text/sql"
+            # )
+
             # --------------------------
-            # NUEVA FUNCIONALIDAD: Descargar SQL generado de la base de datos de SIMs
+            # Descarga del archivo .db directamente
             # --------------------------
-            with sqlite3.connect(db_path_sims) as conn:
-                sql_dump_sims = "\n".join(conn.iterdump())
+            with open(db_path_sims, "rb") as db_file_sims:
+                db_sims_bytes = db_file_sims.read()
+
             st.download_button(
-                label="Descargar SQL generado (SIMs)",
-                data=sql_dump_sims,
-                file_name="sims_hoy.db.sql",
-                mime="text/sql"
+                label="Descargar Base de Datos .db (SIMs)",
+                data=db_sims_bytes,
+                file_name=os.path.basename(db_path_sims),
+                mime="application/octet-stream"
             )
     else:
         st.warning("No se han subido archivos para SIMs.")
