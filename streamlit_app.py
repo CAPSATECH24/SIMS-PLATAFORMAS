@@ -558,6 +558,18 @@ with tabs[0]:
                     else:
                         st.warning(f"No hay registros para {sheet}.")
 
+            # --------------------------
+            # NUEVA FUNCIONALIDAD: Descargar SQL generado de la base de datos de Plataformas
+            # --------------------------
+            with sqlite3.connect(today_db_path_plataformas) as conn:
+                sql_dump = "\n".join(conn.iterdump())
+            st.download_button(
+                label="Descargar SQL generado (Plataformas)",
+                data=sql_dump,
+                file_name=f"{today_db_path_plataformas}.sql",
+                mime="text/sql"
+            )
+
 # ----------------------------------------------------------------------------- 
 # TAB DE SIMs 
 # ----------------------------------------------------------------------------- 
@@ -748,5 +760,17 @@ with tabs[1]:
                         st.metric("Registros Insertados", inserted)
                     with col_b3:
                         st.metric("Tasa de Inserción", f"{insertion_rate:.2f}%")
+            
+            # --------------------------
+            # NUEVA FUNCIONALIDAD: Descargar SQL generado de la base de datos de SIMs
+            # --------------------------
+            with sqlite3.connect(db_path_sims) as conn:
+                sql_dump_sims = "\n".join(conn.iterdump())
+            st.download_button(
+                label="Descargar SQL generado (SIMs)",
+                data=sql_dump_sims,
+                file_name="sims_hoy.db.sql",
+                mime="text/sql"
+            )
     else:
         st.warning("No se han subido archivos para SIMs.")
